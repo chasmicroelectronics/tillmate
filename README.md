@@ -40,3 +40,8 @@ Edit the files, upload them again, and bump `CACHE_NAME` in `sw.js` (for example
 
 - Progress and the menu live in the browser's local storage. They don't move between phone and computer, and clearing site data deletes them.
 - Safari on iPhone can clear website data for home-screen apps that haven't been opened for a while. If that matters, an export and import of progress and the menu can be added.
+
+## Backing up the menu
+
+In **Settings**, tap **Export menu** to save the menu as a `.json` file. On iPhone, choose **Save to Files**.
+To restore or move it, tap **Import menu** and choose the file. Items with the same name are updated rather than duplicated.

@@ -388,6 +388,13 @@ function settingsView() {
 
       <h3>Menu</h3>
       <button class="wide" data-action="openMenuManager">Manage menu</button>
+      <div class="row2">
+        <button data-action="exportMenu">Export menu</button>
+        <button data-action="importMenu">Import menu</button>
+      </div>
+      <input type="file" id="menu-file" accept=".json,application/json" hidden>
+      <p class="muted small">Export saves your menu as a file to keep or move to another device.
+        Import adds new items and updates any with the same name.</p>
 
       <h3>Progress</h3>
       <button class="danger wide" data-action="askReset">Reset progress</button>
@@ -416,6 +423,77 @@ function overlayBody() {
     case 'menuForm': return menuFormView();
     default: return '';
   }
+}
+
+// Menu export and import
+
+function exportMenu() {
+  const items = store.getMenu();
+  if (!items.length) {
+    alert('There are no menu items to export yet.');
+    return;
+  }
+  const payload = {
+    app: 'till-mate',
+    version: 1,
+    currency: settings.currency,      // prices are stored in minor units of this currency
+    exportedAt: new Date().toISOString(),
+    items,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `till-mate-menu-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importMenuFile(file) {
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    alert('That file is not valid JSON.');
+    return;
+  }
+  if (!data || data.app !== 'till-mate' || !Array.isArray(data.items)) {
+    alert('This does not look like a Till Mate menu file.');
+    return;
+  }
+  if (data.currency && data.currency !== settings.currency) {
+    const proceed = confirm(
+      `These prices are in ${data.currency}, but your currency is ${settings.currency}. Import anyway?`
+    );
+    if (!proceed) return;
+  }
+
+  const existing = store.getMenu();
+  let added = 0, updated = 0, skipped = 0;
+
+  for (const raw of data.items) {
+    const name = typeof raw?.name === 'string' ? raw.name.trim().slice(0, 40) : '';
+    const price = Number.isInteger(raw?.price) && raw.price > 0 ? raw.price : null;
+    if (!name || price === null) {
+      skipped++;
+      continue;
+    }
+    // Match by id (same device) or by name (another device), so re-importing never duplicates.
+    const match = existing.find((i) => i.id === raw.id || i.name.toLowerCase() === name.toLowerCase());
+    if (match) {
+      store.saveMenuItem({ id: match.id, name, price });
+      updated++;
+    } else {
+      const item = { id: uid(), name, price };
+      store.saveMenuItem(item);
+      existing.push(item);
+      added++;
+    }
+  }
+
+  alert(`Menu imported: ${added} added, ${updated} updated, ${skipped} skipped.`);
 }
 
 // Rendering and events
@@ -557,6 +635,9 @@ function handle(action, d) {
     }
     case 'deleteMenuItem': store.deleteMenuItem(d.id); break;
 
+    case 'exportMenu': exportMenu(); return false;
+    case 'importMenu': document.getElementById('menu-file').click(); return false;
+
     case 'askReset':
       if (confirm('Reset all progress? This cannot be undone.')) store.clearAttempts();
       break;
@@ -579,7 +660,14 @@ document.addEventListener('click', (e) => {
   if (button) act(button.dataset.action, button.dataset);
 });
 
-document.addEventListener('change', (e) => {
+document.addEventListener('change', async (e) => {
+  if (e.target.id === 'menu-file') {
+    const file = e.target.files[0];
+    e.target.value = '';   // allow choosing the same file again later
+    if (file) await importMenuFile(file);
+    render();
+    return;
+  }
   if (e.target.dataset.setting === 'currency') {
     settings.currency = e.target.value;
     saveSettings();

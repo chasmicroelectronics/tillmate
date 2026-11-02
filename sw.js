@@ -1,5 +1,5 @@
 // Bump CACHE_NAME whenever you change any file, so visitors get the new version.
-const CACHE_NAME = 'till-mate-v1';
+const CACHE_NAME = 'till-mate-v2';
 const ASSETS = [
   './',
   './index.html',
